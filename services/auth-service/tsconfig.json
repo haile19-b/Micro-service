@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",                          /* Set modern JavaScript target */
+    "module": "NodeNext",                        /* Enable native ES Modules support in Node.js */
+    "moduleResolution": "NodeNext",              /* Match module resolution to NodeNext */
+    "outDir": "./dist",                          /* Where compiler outputs JS files */
+    "rootDir": "./src",                          /* Source folder */
+    "strict": true,                              /* Enable strict type-checking */
+    "esModuleInterop": true,                     /* For compatibility with CommonJS modules */
+    "skipLibCheck": true,                        /* Skip library checks for faster builds */
+    "forceConsistentCasingInFileNames": true     /* Avoid file path casing bugs */
+  },
+  "include": ["src/**/*"]
+}
