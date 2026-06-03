@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2022",                          /* Set modern JavaScript target */
-    "module": "NodeNext",                        /* Enable native ES Modules support in Node.js */
-    "moduleResolution": "NodeNext",              /* Match module resolution to NodeNext */
+    "target": "ES2023",                          /* Set modern JavaScript target */
+    "module": "ESNext",                        /* Enable native ES Modules support in Node.js */
+    "moduleResolution": "bundler",              /* Match module resolution to NodeNext */
     "outDir": "./dist",                          /* Where compiler outputs JS files */
     "rootDir": "./src",                          /* Source folder */
     "strict": true,                              /* Enable strict type-checking */
