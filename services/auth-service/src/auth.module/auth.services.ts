@@ -103,7 +103,7 @@ export const AuthService = {
       const newAccess = signAccessToken({ id: payload.id });
       const newRefresh = signRefreshToken({ id: payload.id });
 
-      // Rotate token: update session with the new refresh token
+      // Rotate token: update session with the new refresh token 
       await SessionService.rotate(session.id, newRefresh);
 
       return {
