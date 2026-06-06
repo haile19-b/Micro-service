@@ -2,13 +2,12 @@ import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-super-secret-key";
 
-// Access token expires in 15 minutes
-export function signAccessToken(payload: any) {
+export function signAccessToken(payload: { id: string }) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "15m" });
 }
 
-// Refresh token expires in 7 days
-export function signRefreshToken(payload: any) {
+// Pass both user ID and session ID to the refresh token
+export function signRefreshToken(payload: { id: string; sessionId: string }) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
 }
 
