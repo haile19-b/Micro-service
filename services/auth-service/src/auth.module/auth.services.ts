@@ -149,6 +149,35 @@ export const AuthService = {
     }
   },
 
+  async logout(refreshToken: string) {
+    try {
+      // Decode the token to get the sessionId
+      const payload = jwt.verify(refreshToken, JWT_SECRET) as any;
+      const sessionId = payload.sessionId;
+
+      // Revoke the session in the database
+      await SessionService.revoke(sessionId);
+
+      return { success: true, message: "Logged out successfully" };
+    } catch (err) {
+      // Even if the token is invalid or expired, we return success 
+      // because the user is effectively "logged out" anyway.
+      return { success: true, message: "Logged out successfully" };
+    }
+  },
+
+  async logoutAll(userId: string) {
+    try {
+      await prisma.session.updateMany({
+        where: { userId, revoked: false },
+        data: { revoked: true }
+      });
+      return { success: true, message: "Logged out of all devices successfully" };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  },
+
   async getProfile(userId: string) {
     const user = await prisma.user.findUnique({
       where: { id: userId }

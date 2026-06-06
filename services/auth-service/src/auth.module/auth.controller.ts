@@ -54,18 +54,33 @@ export const AuthController = {
     }
   },
 
-//   async activate(req: Request, res: Response) {
-//     try {
-//       const { token, password } = ActivateAccountSchema.parse(req.body);
-//       const result = await AuthService.activateAccount(token, password);
-//       if (!result.success) {
-//         return res.status(400).json(result);
-//       }
-//       res.json(result);
-//     } catch (error: any) {
-//       res.status(400).json({ success: false, error: error.message });
-//     }
-//   },
+  async logout(req: Request, res: Response) {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        return res.status(400).json({ success: false, error: "Refresh token is required" });
+      }
+
+      const result = await AuthService.logout(refreshToken);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  async logoutAll(req: any, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: "Unauthorized" });
+      }
+
+      const result = await AuthService.logoutAll(userId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
 
   async me(req: any, res: Response) {
     try {
