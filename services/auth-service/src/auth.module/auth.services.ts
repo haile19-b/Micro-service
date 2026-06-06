@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { signAccessToken, signRefreshToken } from './jwt.js'; // Remember the .js extension!
 import { SessionService } from './session.service.js';
+import { ObjectId } from 'mongodb'; // MongoDB ID generator or a generic UUID generator
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-super-secret-key";
@@ -33,14 +34,17 @@ export const AuthService = {
       }
     });
 
+    const sessionId = new ObjectId().toString(); // Generate the ID first
+
     const accessToken = signAccessToken({ id: user.id });
-    const refreshToken = signRefreshToken({ id: user.id });
+    const refreshToken = signRefreshToken({ id: user.id, sessionId });
 
     const session = await SessionService.create(
+      sessionId,
       user.id,
       refreshToken,
       userAgent,
-      ip,
+      ip
     );
 
     return {
@@ -69,11 +73,13 @@ export const AuthService = {
     if (!isPasswordValid) {
       return { success: false, error: "Invalid credentials" };
     }
+    const sessionId = new ObjectId().toString(); // Generate the ID first
 
     const accessToken = signAccessToken({ id: user.id });
-    const refreshToken = signRefreshToken({ id: user.id });
+    const refreshToken = signRefreshToken({ id: user.id, sessionId });
 
     const session = await SessionService.create(
+      sessionId,
       user.id,
       refreshToken,
       userAgent,
@@ -94,17 +100,42 @@ export const AuthService = {
   },
 
   async refresh(refreshToken: string) {
-    const session = await SessionService.findValid(refreshToken);
-    if (!session) return { success: false, error: "Invalid or expired refresh token" };
-
     try {
+      // 1. Verify and decode the token
       const payload = jwt.verify(refreshToken, JWT_SECRET) as any;
+      const sessionId = payload.sessionId;
 
+      // 2. Fetch the session from the DB by its ID (not by the token string)
+      const session = await prisma.session.findUnique({
+        where: { id: sessionId }
+      });
+
+      // 3. If no session exists or it is already revoked, block
+      if (!session || session.revoked) {
+        return { success: false, error: "Invalid or expired session" };
+      }
+
+      // 4. CHECK FOR REUSE (Token Replay Attack)
+      if (session.token !== refreshToken) {
+        // Someone is presenting an old refresh token that was already rotated!
+        // Revoke the session immediately to lock out the attacker
+        await SessionService.revoke(sessionId);
+        console.warn(`SECURITY WARNING: Replay attack detected for session ${sessionId}. Revoking session.`);
+        return { success: false, error: "Compromised session. Please login again." };
+      }
+
+      // 5. Check if session has expired
+      if (new Date() > session.expiresAt) {
+        await SessionService.revoke(sessionId);
+        return { success: false, error: "Session expired" };
+      }
+
+      // 6. Normal Flow: Generate new tokens
       const newAccess = signAccessToken({ id: payload.id });
-      const newRefresh = signRefreshToken({ id: payload.id });
+      const newRefresh = signRefreshToken({ id: payload.id, sessionId });
 
-      // Rotate token: update session with the new refresh token 
-      await SessionService.rotate(session.id, newRefresh);
+      // Rotate: Save the new refresh token in the database
+      await SessionService.rotate(sessionId, newRefresh);
 
       return {
         success: true,
@@ -114,7 +145,7 @@ export const AuthService = {
         }
       };
     } catch (err) {
-      return { success: false, error: "Invalid or expired refresh token" };
+      return { success: false, error: "Invalid refresh token" };
     }
   },
 

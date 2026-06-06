@@ -3,9 +3,10 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export const SessionService = {
-  async create(userId: string, refreshToken: string, userAgent?: string, ip?: string) {
+  async create(id: string, userId: string, refreshToken: string, userAgent?: string, ip?: string) {
     return prisma.session.create({
       data: {
+        id,
         userId,
         token: refreshToken,
         expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7), // 7 days
