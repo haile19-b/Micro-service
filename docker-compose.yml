@@ -1,0 +1,15 @@
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb_dev
+    # Bind only to 127.0.0.1 so it's not exposed to your local network
+    ports:
+      - "127.0.0.1:27018:27018"
+    # Removed MONGO_INITDB environment variables to disable auth for dev
+    command: ["--replSet", "rs0", "--port", "27018"]
+    volumes:
+      - mongodb_data:/data/db
+
+volumes:
+  mongodb_data:
+    driver: local
