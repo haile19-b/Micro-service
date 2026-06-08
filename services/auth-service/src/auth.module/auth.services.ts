@@ -1,9 +1,9 @@
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { signAccessToken, signRefreshToken } from './jwt.js'; // Remember the .js extension!
-import { SessionService } from './session.service.js';
+import { signAccessToken, signRefreshToken } from './jwt'; // Remember the .js extension!
+import { SessionService } from './session.service';
 import { ObjectId } from 'mongodb'; // MongoDB ID generator or a generic UUID generator
+import { PrismaClient } from '../generated/prisma/client';
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-super-secret-key";
@@ -104,7 +104,7 @@ export const AuthService = {
       // 1. Verify and decode the token
       const payload = jwt.verify(refreshToken, JWT_SECRET) as any;
       const sessionId = payload.sessionId;
-
+      
       // 2. Fetch the session from the DB by its ID (not by the token string)
       const session = await prisma.session.findUnique({
         where: { id: sessionId }
