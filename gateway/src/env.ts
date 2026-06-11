@@ -5,6 +5,7 @@ dotenv.config();
 
 const EnvSchema = z.object({
   JWT_SECRET:z.string(),
-  DATABASE_URL:z.string()
+  AUTH_SERVICE_URL:z.string(),
+  PRODUCT_SERVICE_URL:z.string(),
 })
 export const env = EnvSchema.parse(process.env);
