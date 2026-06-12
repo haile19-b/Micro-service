@@ -7,6 +7,7 @@ const route = Router();
 
 const AUTH_SERVICE_URL = env.AUTH_SERVICE_URL;
 const PRODUCT_SERVICE_URL = env.PRODUCT_SERVICE_URL;
+const ORDER_SERVICE_URL = env.ORDER_SERVICE_URL;
 
 // ─────────────────────────────────────────────────────────────────
 // AUTH SERVICE ROUTES (Public — no gateway auth needed)
@@ -36,5 +37,16 @@ route.get('/products/:id', productProxy);
 // Gateway validates the Access Token, then injects x-user-id into headers
 // The product-service trusts x-user-id because it's behind the private gateway
 route.post('/products', authMiddleware, productProxy);
+
+// ─────────────────────────────────────────────────────────────────
+// ORDER SERVICE ROUTES (Protected — requires gateway auth)
+// ─────────────────────────────────────────────────────────────────
+const orderProxy = proxy(ORDER_SERVICE_URL, {
+  proxyReqPathResolver: (req) => {
+    return req.url;
+  }
+});
+
+route.use('/orders', authMiddleware, orderProxy);
 
 export default route;

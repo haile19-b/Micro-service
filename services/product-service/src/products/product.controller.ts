@@ -34,4 +34,18 @@ export const ProductController = {
       res.status(400).json({ success: false, error: error.message });
     }
   },
+
+  async reduceStock(req: Request, res: Response) {
+    try {
+      const id  = req.params.id as string;
+      const { quantity } = req.body;
+      if (typeof quantity !== "number" || quantity <= 0) {
+        return res.status(400).json({ success: false, error: "Quantity must be a positive number" });
+      }
+      const product = await ProductService.reduceStock(id, quantity);
+      res.json({ success: true, data: product });
+    } catch (error: any) {
+      res.status(400).json({ success: false, error: error.message });
+    }
+  },
 };
