@@ -6,5 +6,6 @@ const route = Router();
 route.get("/", ProductController.getAllProducts);
 route.get("/:id", ProductController.getProductById);
 route.post("/", ProductController.createProduct);
+route.patch("/:id/reduce-stock", ProductController.reduceStock);
 
 export default route;
