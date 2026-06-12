@@ -64,4 +64,30 @@ export class ProductService {
 
     return product;
   }
+
+  static async reduceStock(id: string, quantity: number) {
+    const product = await prisma.product.findUnique({ where: { id } });
+    if (!product) {
+      throw new Error("Product not found");
+    }
+    if (product.stock < quantity) {
+      throw new Error("Insufficient stock");
+    }
+
+    const updated = await prisma.product.update({
+      where: { id },
+      data: {
+        stock: {
+          decrement: quantity
+        }
+      }
+    });
+
+    // Invalidate the cache for this product and the list of all products
+    await redis.del(CACHE_KEYS.product(id));
+    await redis.del(CACHE_KEYS.allProducts);
+    console.log(`Cache INVALIDATED for products:${id} and products:all due to stock reduction`);
+
+    return updated;
+  }
 }
