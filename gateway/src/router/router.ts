@@ -43,7 +43,7 @@ route.post('/products', authMiddleware, productProxy);
 // ─────────────────────────────────────────────────────────────────
 const orderProxy = proxy(ORDER_SERVICE_URL, {
   proxyReqPathResolver: (req) => {
-    return req.url;
+    return `/orders${req.url}`;
   }
 });
 
