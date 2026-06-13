@@ -13,7 +13,7 @@ export const OrderController = {
       const { productId, quantity } = CreateOrderSchema.parse(req.body);
 
       const order = await OrderService.createOrder(userId, productId, quantity);
-      res.status(201).json({ success: true, data: order });
+      res.status(202).json({ success: true, message: "Order placed and is being processed", data: order });
     } catch (error: any) {
       res.status(400).json({ success: false, error: error.message });
     }
