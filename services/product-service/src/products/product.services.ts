@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import redis from '../lib/redis.js';
+import RabbitMQ from '../lib/rabbitmq.js';
 
 
 // Cache key constants — centralizing these prevents typos
@@ -89,5 +90,49 @@ export class ProductService {
     console.log(`Cache INVALIDATED for products:${id} and products:all due to stock reduction`);
 
     return updated;
+  }
+
+  static async listenForOrders() {
+    await RabbitMQ.connect();
+
+    await RabbitMQ.consumeMessage("order.created", async (payload: { orderId: string; productId: string; quantity: number }) => {
+      const { orderId, productId, quantity } = payload;
+      console.log(`📥 Processing stock reservation for Order ${orderId}, Product ${productId}, Quantity ${quantity}`);
+
+      try {
+        const product = await prisma.product.findUnique({ where: { id: productId } });
+        if (!product) {
+          throw new Error("Product not found");
+        }
+
+        if (product.stock < quantity) {
+          throw new Error("Insufficient stock available");
+        }
+
+        // Deduct stock atomically in DB
+        await prisma.product.update({
+          where: { id: productId },
+          data: {
+            stock: {
+              decrement: quantity
+            }
+          }
+        });
+
+        // Invalidate Redis caches
+        await redis.del(CACHE_KEYS.product(productId));
+        await redis.del(CACHE_KEYS.allProducts);
+        console.log(`Cache INVALIDATED for products:${productId} and products:all due to event stock reduction`);
+
+        // Calculate total price and publish success feedback event
+        const totalPrice = product.price * quantity;
+        await RabbitMQ.publishMessage("order.stock.reserved", { orderId, totalPrice });
+      } catch (error: any) {
+        console.error(`❌ Stock reservation failed for Order ${orderId}:`, error.message);
+        
+        // Publish failure feedback event
+        await RabbitMQ.publishMessage("order.stock.failed", { orderId, reason: error.message });
+      }
+    });
   }
 }
