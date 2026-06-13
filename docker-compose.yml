@@ -13,12 +13,22 @@ services:
     image: redis:7-alpine
     container_name: redis_dev
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:6380:6379"
     volumes:
       - redis_data:/data
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq_dev
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
 
 volumes:
   mongodb_data:
     driver: local
   redis_data:                            # ← ADD THIS
+    driver: local
+  rabbitmq_data:
     driver: local
