@@ -1,0 +1,106 @@
+import { prisma } from '../lib/prisma.js';
+import redis from '../lib/redis.js';
+import RabbitMQ from '../lib/rabbitmq.js';
+// Cache key constants — centralizing these prevents typos
+const CACHE_KEYS = {
+    allProducts: 'products:all',
+    product: (id) => `products:${id}`,
+};
+const CACHE_TTL = 60; // seconds
+export class ProductService {
+    static async getAllProducts() {
+        // 1. Check cache first
+        const cached = await redis.get(CACHE_KEYS.allProducts);
+        if (cached) {
+            console.log('Cache HIT: products:all');
+            return JSON.parse(cached);
+        }
+        // 2. Cache MISS: query database
+        console.log('Cache MISS: products:all — querying DB');
+        const products = await prisma.product.findMany();
+        // 3. Store in Redis with TTL
+        await redis.setex(CACHE_KEYS.allProducts, CACHE_TTL, JSON.stringify(products));
+        return products;
+    }
+    static async getProductById(id) {
+        const cacheKey = CACHE_KEYS.product(id);
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            console.log(`Cache HIT: ${cacheKey}`);
+            return JSON.parse(cached);
+        }
+        console.log(`Cache MISS: ${cacheKey} — querying DB`);
+        const product = await prisma.product.findUnique({ where: { id } });
+        if (product) {
+            await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(product));
+        }
+        return product;
+    }
+    static async createProduct(data) {
+        // 1. Write to database
+        const product = await prisma.product.create({ data });
+        // 2. Invalidate the "all products" cache so next GET fetches fresh data
+        await redis.del(CACHE_KEYS.allProducts);
+        console.log('Cache INVALIDATED: products:all');
+        return product;
+    }
+    static async reduceStock(id, quantity) {
+        const product = await prisma.product.findUnique({ where: { id } });
+        if (!product) {
+            throw new Error("Product not found");
+        }
+        if (product.stock < quantity) {
+            throw new Error("Insufficient stock");
+        }
+        const updated = await prisma.product.update({
+            where: { id },
+            data: {
+                stock: {
+                    decrement: quantity
+                }
+            }
+        });
+        // Invalidate the cache for this product and the list of all products
+        await redis.del(CACHE_KEYS.product(id));
+        await redis.del(CACHE_KEYS.allProducts);
+        console.log(`Cache INVALIDATED for products:${id} and products:all due to stock reduction`);
+        return updated;
+    }
+    static async listenForOrders() {
+        await RabbitMQ.connect();
+        await RabbitMQ.consumeMessage("order.created", async (payload) => {
+            const { orderId, productId, quantity } = payload;
+            console.log(`📥 Processing stock reservation for Order ${orderId}, Product ${productId}, Quantity ${quantity}`);
+            try {
+                const product = await prisma.product.findUnique({ where: { id: productId } });
+                if (!product) {
+                    throw new Error("Product not found");
+                }
+                if (product.stock < quantity) {
+                    throw new Error("Insufficient stock available");
+                }
+                // Deduct stock atomically in DB
+                await prisma.product.update({
+                    where: { id: productId },
+                    data: {
+                        stock: {
+                            decrement: quantity
+                        }
+                    }
+                });
+                // Invalidate Redis caches
+                await redis.del(CACHE_KEYS.product(productId));
+                await redis.del(CACHE_KEYS.allProducts);
+                console.log(`Cache INVALIDATED for products:${productId} and products:all due to event stock reduction`);
+                // Calculate total price and publish success feedback event
+                const totalPrice = product.price * quantity;
+                await RabbitMQ.publishMessage("order.stock.reserved", { orderId, totalPrice });
+            }
+            catch (error) {
+                console.error(`❌ Stock reservation failed for Order ${orderId}:`, error.message);
+                // Publish failure feedback event
+                await RabbitMQ.publishMessage("order.stock.failed", { orderId, reason: error.message });
+            }
+        });
+    }
+}
