@@ -22,3 +22,9 @@ model Product {
   stock       Int
   createdAt   DateTime @default(now())
 }
+
+model ProcessedOrder {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  orderId   String   @unique
+  createdAt DateTime @default(now())
+}
