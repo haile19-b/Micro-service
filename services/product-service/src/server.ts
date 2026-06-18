@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import route from './products/product.routes.js';
 import { ProductService } from './products/product.services.js';
+import { ConsulRegistry } from './lib/consul.js';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -13,7 +14,7 @@ app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'UP', service: 'product-service' });
 });
 
-app.listen(PORT, async () => {
+const server = app.listen(PORT, async () => {
   console.log(`Product Service is running on port ${PORT}`);
   try {
     await ProductService.listenForOrders();
@@ -21,4 +22,16 @@ app.listen(PORT, async () => {
   } catch (err) {
     console.error("❌ Failed to start RabbitMQ consumers in Product Service:", err);
   }
+  await ConsulRegistry.register("product-service", Number(PORT));
 });
+
+const handleShutdown = async () => {
+  await ConsulRegistry.deregister();
+  server.close(() => {
+    console.log("HTTP server closed");
+    process.exit(0);
+  });
+};
+
+process.on("SIGINT", handleShutdown);
+process.on("SIGTERM", handleShutdown);
