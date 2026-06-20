@@ -7,28 +7,37 @@ export class ConsulRegistry {
   private static serviceId: string;
   private static serviceName: string;
 
-  static async register(name: string, port: number) {
+   static async register(name: string, port: number) {
     this.serviceName = name;
-    // Unique ID prevents multiple instances on different ports from overwriting each other
     this.serviceId = `${name}-${port}`;
+
+    // 1. Detect if running inside Docker Compose
+    const isDocker = process.env.RUNNING_IN_DOCKER === "true";
+    
+    // Inside Docker, the container's hostname is its container ID (stored in process.env.HOSTNAME)
+    // Outside Docker, we use 127.0.0.1
+    const serviceAddress = isDocker ? (process.env.HOSTNAME || "127.0.0.1") : "127.0.0.1";
+    
+    // Consul health checker host:
+    // Inside Docker, Consul pings the container hostname directly
+    // Outside Docker, Consul pings host.docker.internal
+    const checkHost = isDocker ? (process.env.HOSTNAME || "127.0.0.1") : "host.docker.internal";
 
     const registrationBody = {
       ID: this.serviceId,
       Name: this.serviceName,
-      Address: "127.0.0.1",
+      Address: serviceAddress,
       Port: port,
       Check: {
-        // Consul will ping this endpoint to verify health status
-        HTTP: `http://host.docker.internal:${port}/health`,
+        HTTP: `http://${checkHost}:${port}/health`,
         Interval: "10s",
         Timeout: "5s",
-        // Automatically remove the service instance if it remains dead for over 1 minute
         DeregisterCriticalServiceAfter: "1m"
       }
     };
 
     try {
-      console.log(`📡 Registering ${this.serviceId} with Consul...`);
+      console.log(`📡 Registering ${this.serviceId} with Consul (isDocker: ${isDocker})...`);
       const response = await fetch(`${CONSUL_URL}/v1/agent/service/register`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
