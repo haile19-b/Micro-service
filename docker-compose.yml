@@ -1,21 +1,28 @@
 services:
+  # ─────────────────────────────────────────────────────────────────
+  # INFRASTRUCTURE SERVICES
+  # ─────────────────────────────────────────────────────────────────
   mongodb:
     image: mongo:latest
     container_name: mongodb_dev
-    # Bind only to 127.0.0.1 so it's not exposed to your local network
     ports:
       - "127.0.0.1:27018:27018"
-    # Removed MONGO_INITDB environment variables to disable auth for dev
     command: ["--replSet", "rs0", "--port", "27018"]
     volumes:
       - mongodb_data:/data/db
-  redis:                                 # ← ADD THIS
+    networks:
+      - ecommerce_net
+
+  redis:
     image: redis:7-alpine
     container_name: redis_dev
     ports:
-      - "127.0.0.1:6380:6379"
+      - "127.0.0.1:6380:6379" # Exposed on 6380 for local host client inspection
     volumes:
       - redis_data:/data
+    networks:
+      - ecommerce_net
+
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: rabbitmq_dev
@@ -24,17 +31,111 @@ services:
       - "127.0.0.1:15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ecommerce_net
+
   consul:
     image: hashicorp/consul:1.16
     container_name: consul_dev
     ports:
       - "127.0.0.1:8500:8500"
     command: "agent -dev -client=0.0.0.0"
+    networks:
+      - ecommerce_net
+
+  # ─────────────────────────────────────────────────────────────────
+  # APPLICATION SERVICES (Custom Microservices)
+  # ─────────────────────────────────────────────────────────────────
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth_service_container
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DATABASE_URL=mongodb://mongodb_dev:27018/auth_db?replicaSet=rs0
+      - JWT_SECRET=hello_world
+      - CONSUL_URL=http://consul_dev:8500
+      - RUNNING_IN_DOCKER=true
+    depends_on:
+      - mongodb
+      - consul
+    networks:
+      - ecommerce_net
+
+  product-service:
+    build:
+      context: ./services/product-service
+      dockerfile: Dockerfile
+    container_name: product_service_container
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - DATABASE_URL=mongodb://mongodb_dev:27018/product_db?replicaSet=rs0
+      - REDIS_HOST=redis_dev
+      - REDIS_PORT=6379 # Connect internally to container port 6379
+      - RABBITMQ_URL=amqp://rabbitmq_dev:5672
+      - CONSUL_URL=http://consul_dev:8500
+      - RUNNING_IN_DOCKER=true
+    depends_on:
+      - mongodb
+      - redis
+      - rabbitmq
+      - consul
+    networks:
+      - ecommerce_net
+
+  order-service:
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    container_name: order_service_container
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - DATABASE_URL=mongodb://mongodb_dev:27018/order_db?replicaSet=rs0
+      - PRODUCT_SERVICE_URL=http://product_service_container:3002
+      - RABBITMQ_URL=amqp://rabbitmq_dev:5672
+      - CONSUL_URL=http://consul_dev:8500
+      - RUNNING_IN_DOCKER=true
+    depends_on:
+      - mongodb
+      - rabbitmq
+      - consul
+    networks:
+      - ecommerce_net
+
+  api-gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: api_gateway_container
+    ports:
+      - "5000:3000" # Expose gateway on port 5000 of your host
+    environment:
+      - PORT=3000
+      - JWT_SECRET=hello_world
+      - CONSUL_URL=http://consul_dev:8500
+    depends_on:
+      - auth-service
+      - product-service 
+      - order-service
+      - consul
+    networks:
+      - ecommerce_net
 
 volumes:
   mongodb_data:
     driver: local
-  redis_data:                            # ← ADD THIS
+  redis_data:
     driver: local
   rabbitmq_data:
     driver: local
+
+networks:
+  ecommerce_net:
+    driver: bridge
