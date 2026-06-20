@@ -45,6 +45,7 @@ const orderProxy = proxy((req: any) => req.targetUrl, {
   }
 });
 
-route.use('/orders', authMiddleware,discoverService('auth-service'), orderProxy);
+route.get('/orders', authMiddleware,discoverService('auth-service'), orderProxy);
+route.post('/orders', authMiddleware,discoverService('auth-service'), orderProxy);
 
 export default route;
