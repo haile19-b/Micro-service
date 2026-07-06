@@ -41,11 +41,11 @@ route.post('/products', authMiddleware,discoverService('product-service'), produ
 // ─────────────────────────────────────────────────────────────────
 const orderProxy = proxy((req: any) => req.targetUrl, {
   proxyReqPathResolver: (req) => {
-    return `/orders${req.url}`;
+    return req.url;
   }
 });
 
-route.get('/orders', authMiddleware,discoverService('auth-service'), orderProxy);
-route.post('/orders', authMiddleware,discoverService('auth-service'), orderProxy);
+route.get('/orders', authMiddleware,discoverService('order-service'), orderProxy);
+route.post('/orders', authMiddleware,discoverService('order-service'), orderProxy);
 
 export default route;
